@@ -300,7 +300,7 @@ void * worker(void *arg) {
           }
 
           //(3) Now that you have the lock AND the queue is not empty, read from the request queue
-          fd = req_entries[curequest]->fd;
+          //fd = req_entries[curequest]->fd;
           //request_file_path = req_entries[curequest]->request;
           if ((get_request(fd, request_file_path)) != 0)    //succesfully request
           {
@@ -343,8 +343,13 @@ void * worker(void *arg) {
     *                      You will need to lock and unlock the logfile to write to it in a thread safe manor
     */
         pthread_mutex_lock(&log_lock);
-        LogPrettyPrint( NULL, threadID[workerIndex], num_request, fd, request_file_path, NULL  /*get_request(fd, request_file_path)*/ , cache_hit);
+        LogPrettyPrint( NULL, threadID[workerIndex], num_request, fd, request_file_path, sizeof(request_file_path) , cache_hit);       // This one prints to the terminal
+        LogPrettyPrint( logfile, threadID[workerIndex], num_request, fd, request_file_path, sizeof(request_file_path) , cache_hit);    // This one prints to logfile
+        // I think we have to make two cases:
+        //    - one where get_request() successfully read from the request queue
+        //    - one where get request() failed to read from the request queue 
         pthread_mutex_unlock(&log_lock);
+
     /* TODO (C.V)
     *    Description:      Get the content type and return the result or error
     *    Utility Function: (1) int return_result(int fd, char *content_type, char *buf, int numbytes); //look in utils.h 
@@ -354,7 +359,7 @@ void * worker(void *arg) {
       {
         return_result(fd, getContentType(request_file_path), request_file_path, filesize);
       } else {
-        printf("worker(): error\n");
+        printf("worker(): return_error\n");
       }
   }
 
@@ -462,9 +467,8 @@ int main(int argc, char **argv) {
   *    Hint:             Check for error!
   */
 
-  if(chdir("/~") == -1 )
-  {
-    // Where is server root directory? is it "/~"?
+  if(chdir("~/project_3_posted") == -1 )
+  { // I think the server root directory is the path where the project_3_posted folder is saved in
     printf("main(): could not change current working directory to server root directory\n");
   }
 
