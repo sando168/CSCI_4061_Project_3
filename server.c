@@ -4,6 +4,7 @@
     Logan O'Connell    (ocon0454)
 */
 #include "server.h"
+#include "string.h"
 #define PERM 0644
 
 //Global Variables [Values Set in main()]
@@ -75,7 +76,7 @@ void addIntoCache(char *mybuf, char *memory , int memory_size)
   printf("addIntoCache(): checking if cache[cache_write].len != 0\n");
   if(cache[cache_write]->len != 0)
   {
-    printf("addIntoCache(): cache[cache_write].len == 0, freeing cache_entry's request and content fields\n");
+    printf("addIntoCache(): cache[cache_write].len != 0, freeing cache_entry's request and content fields\n");
     free((void*)cache[cache_write]->request);
     free((void*)cache[cache_write]->content);
   }
@@ -172,7 +173,7 @@ int readFromDisk(int fd, char *mybuf, void **memory)
   *                      What do we do with files after we open them?
   */
 
-  struct stat st;       // ???
+  struct stat st;
   fstat(fd, &st);
   int size = st.st_size;
   
@@ -300,8 +301,6 @@ void * worker(void *arg) {
           }
 
           //(3) Now that you have the lock AND the queue is not empty, read from the request queue
-          //fd = req_entries[curequest]->fd;
-          //request_file_path = req_entries[curequest]->request;
           if ((get_request(fd, request_file_path)) != 0)    //succesfully request
           {
               printf("Fail request\n"); 
@@ -311,9 +310,9 @@ void * worker(void *arg) {
           curequest--; 
 
           //(5) Check for a path with only a "/" if that is the case add index.html to it
-          if(request_file_path == "/" )
-          {
-            memcpy(request_file_path, request_file_path + "/index.html", sizeof(request_file_path)+12);
+          if( !strcmp(request_file_path, "/") )       // strcmp = string compare    returns 0 if strings are the same
+          {                                   // Why do we check if the path is only "/", shouldn't we add "/index.html" regardless
+            strcat(request_file_path, "/index.html");
           }
 
           //(6) Fire the request queue not full signal to indicate the queue has a slot opened up and release the request queue lock
@@ -330,7 +329,7 @@ void * worker(void *arg) {
         if(cache_index != INVALID)  //cache hit
         {
           filesize = sizeof(cache[cache_index]);
-          memcpy(memory, cache[cache_index]->content, filesize);      // do we store the data in memory?
+          memcpy(memory, cache[cache_index]->content, filesize);      // do we store the data in memory? what does memory do?
         } else {
           filesize = readFromDisk(fd, request_file_path, memory);
           memcpy(memory, request_file_path, filesize);
@@ -342,12 +341,10 @@ void * worker(void *arg) {
     *    Hint:             Call LogPrettyPrint with to_write = NULL which will print to the terminal
     *                      You will need to lock and unlock the logfile to write to it in a thread safe manor
     */
+        // I'm not sure if I'm doing the num_bytes_or_error parameter right
         pthread_mutex_lock(&log_lock);
         LogPrettyPrint( NULL, threadID[workerIndex], num_request, fd, request_file_path, sizeof(request_file_path) , cache_hit);       // This one prints to the terminal
         LogPrettyPrint( logfile, threadID[workerIndex], num_request, fd, request_file_path, sizeof(request_file_path) , cache_hit);    // This one prints to logfile
-        // I think we have to make two cases:
-        //    - one where get_request() successfully read from the request queue
-        //    - one where get request() failed to read from the request queue 
         pthread_mutex_unlock(&log_lock);
 
     /* TODO (C.V)
@@ -357,9 +354,9 @@ void * worker(void *arg) {
     */
       if( !return_error(fd, request_file_path) ) //success
       {
-        return_result(fd, getContentType(request_file_path), request_file_path, filesize);
+        return_result(fd, getContentType(request_file_path), request_file_path, filesize);      // Probably not doing this right. Have to do something with CFLAGS as -D_REENTRANT?
       } else {
-        printf("worker(): return_error\n");
+        printf("worker(): return_error bad request\n");
       }
   }
 
@@ -494,6 +491,7 @@ int main(int argc, char **argv) {
   */
 
   pthread_create(&dispatcher_thread[0], NULL, dispatch, NULL);
+  pthread_create(&worker_thread[0], NULL, worker, NULL);
 
   // Wait for each of the threads to complete their work
   // Threads (if created) will not exit (see while loop), but this keeps main from exiting
